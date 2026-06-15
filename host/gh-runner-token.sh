@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Generates a self-hosted runner registration token for a repo, authenticating
-# as a GitHub App: JWT -> installation access token -> registration token.
+# Generates a token for managing self-hosted runners, authenticating as a
+# GitHub App: JWT -> installation access token -> (optional) registration token.
+#
+# GH_TOKEN_KIND controls what is printed on stdout:
+#   registration (default) - registration token, used by runners to enroll.
+#   installation           - installation access token (~1h), used to call the
+#                            Actions API directly (list / delete runners, ...).
 #
 # Requirements: openssl, curl, jq
 
@@ -11,6 +16,7 @@ APP_ID="${GITHUB_APP_ID:-}"                       # GitHub App ID (numeric)
 PRIVATE_KEY_PATH="${GITHUB_APP_PRIVATE_KEY_PATH:-}"  # path to App .pem private key
 OWNER="${GITHUB_OWNER:-}"
 REPO="${GITHUB_REPO:-}"   # optional: set for a repo-level runner, leave empty for an org-level runner
+TOKEN_KIND="${GH_TOKEN_KIND:-registration}"
 
 API="https://api.github.com"
 
@@ -87,10 +93,20 @@ installation_token=$(gh_api "installation token" -X POST \
 [ -n "$installation_token" ] && [ "$installation_token" != "null" ] \
   || { log "❌ Failed to obtain installation access token"; exit 1; }
 
-# --- 4. Create the runner registration token ---
-# Requires the App to have Administration: Read and write (repo scope) or
-# Organization self-hosted runners: Read and write (org scope).
-gh_api "registration token" -X POST \
-  -H "Authorization: Bearer ${installation_token}" \
-  "${API}/${SCOPE}/actions/runners/registration-token" \
-  | jq -r '.token'
+case "$TOKEN_KIND" in
+  installation)
+    printf '%s\n' "$installation_token"
+    ;;
+  registration)
+    # Requires the App to have Administration: Read and write (repo scope) or
+    # Organization self-hosted runners: Read and write (org scope).
+    gh_api "registration token" -X POST \
+      -H "Authorization: Bearer ${installation_token}" \
+      "${API}/${SCOPE}/actions/runners/registration-token" \
+      | jq -r '.token'
+    ;;
+  *)
+    log "❌ Unknown GH_TOKEN_KIND: $TOKEN_KIND (expected installation or registration)"
+    exit 1
+    ;;
+esac
