@@ -43,18 +43,36 @@ Still from your local machine, copy a few files from this repository. The `.env`
 
 ```
 $ scp launch.sh admin@<HOST_IP>:vm
+$ scp gh-runner-token.sh admin@<HOST_IP>:vm
 $ scp com.mirego.ekiden.plist admin@<HOST_IP>:vm
 $ scp .env admin@<HOST_IP>:vm
 ```
 
+### Authentication
+
+The runner needs a registration token to join GitHub. Pick one of two methods with `GITHUB_AUTH_METHOD` in `.env`:
+
+- **`token`** (default) — a personal/org API token. Set `GITHUB_API_TOKEN` and `GITHUB_REGISTRATION_ENDPOINT` (org or repo URL).
+- **`app`** — a GitHub App, via `gh-runner-token.sh`. Set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PATH`, `GITHUB_OWNER`, and optionally `GITHUB_REPO`:
+  - `GITHUB_REPO` set → **repo-level** runner (App needs _Administration: Read and write_).
+  - `GITHUB_REPO` empty → **org-level** runner (App needs _Organization self-hosted runners: Read and write_).
+
+  Also copy the App private key to the host and point `GITHUB_APP_PRIVATE_KEY_PATH` at it:
+
+  ```
+  $ scp app-private-key.pem admin@<HOST_IP>:vm
+  ```
+
 ### Install Tools
 
-On the remote machine, install [Homebrew](https://brew.sh), `wget`, `sshpass` and [tart](https://github.com/cirruslabs/tart/)
+On the remote machine, install [Homebrew](https://brew.sh), `wget`, `sshpass`, `jq` and [tart](https://github.com/cirruslabs/tart/)
 
 ```
 $ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-$ brew install wget cirruslabs/cli/tart cirruslabs/cli/sshpass
+$ brew install wget jq cirruslabs/cli/tart cirruslabs/cli/sshpass
 ```
+
+> `jq` is only required for the `app` authentication method (see below).
 
 ### Start the Runner
 

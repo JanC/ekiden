@@ -124,7 +124,11 @@ function run_loop {
 	RUN_ID="$RANDOM$RANDOM"
 
 	log_output "[HOST] 🎫 Creating registration token"
-	REGISTRATION_TOKEN=$(curl -s -XPOST -H "Authorization: bearer $GITHUB_API_TOKEN" -H "Accept: application/vnd.github.v3+json" "$GITHUB_REGISTRATION_ENDPOINT" | grep "token" | sed "s/..\"token\":.\"//" | sed "s/\",$//")
+	if [ "${GITHUB_AUTH_METHOD:-token}" = "app" ]; then
+		REGISTRATION_TOKEN=$("$(dirname "$0")/gh-runner-token.sh")
+	else
+		REGISTRATION_TOKEN=$(curl -s -XPOST -H "Authorization: bearer $GITHUB_API_TOKEN" -H "Accept: application/vnd.github.v3+json" "$GITHUB_REGISTRATION_ENDPOINT" | grep "token" | sed "s/..\"token\":.\"//" | sed "s/\",$//")
+	fi
 
 	log_output "[HOST] 💻 Launching macOS VM"
 	INSTANCE_NAME=runner_"$RUNNER_NAME"_"$RUN_ID"
