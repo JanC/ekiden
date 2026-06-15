@@ -14,8 +14,11 @@ REPO="${GITHUB_REPO:-}"   # optional: set for a repo-level runner, leave empty f
 
 API="https://api.github.com"
 
+# stdout is reserved for the token (captured by launch.sh), so logs go to stderr.
+log() { echo "$(date "+%Y/%m/%d %H:%M:%S") [HOST] $1" >&2; }
+
 for var in GITHUB_APP_ID GITHUB_APP_PRIVATE_KEY_PATH GITHUB_OWNER; do
-  [ -n "${!var:-}" ] || { echo "missing required env var: $var" >&2; exit 1; }
+  [ -n "${!var:-}" ] || { log "❌ Missing required env var: $var"; exit 1; }
 done
 
 # Repo scope when GITHUB_REPO is set, org scope otherwise.
@@ -26,9 +29,9 @@ else
 fi
 
 for cmd in openssl curl jq; do
-  command -v "$cmd" >/dev/null 2>&1 || { echo "missing dependency: $cmd" >&2; exit 1; }
+  command -v "$cmd" >/dev/null 2>&1 || { log "❌ Missing dependency: $cmd"; exit 1; }
 done
-[ -r "$PRIVATE_KEY_PATH" ] || { echo "cannot read private key: $PRIVATE_KEY_PATH" >&2; exit 1; }
+[ -r "$PRIVATE_KEY_PATH" ] || { log "❌ Cannot read private key: $PRIVATE_KEY_PATH"; exit 1; }
 
 b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 
@@ -45,8 +48,7 @@ gh_api() {
   http="${resp##*$'\n'}"
   body="${resp%$'\n'*}"
   if [ "$http" -lt 200 ] || [ "$http" -ge 300 ]; then
-    echo "[$label] HTTP $http" >&2
-    echo "$body" | jq -r '.message // empty' >&2 2>/dev/null || echo "$body" >&2
+    log "❌ ${label} failed (HTTP $http): $(echo "$body" | jq -r '.message // empty' 2>/dev/null || echo "$body")"
     exit 1
   fi
   printf '%s' "$body"
@@ -74,7 +76,7 @@ installation_id=$(gh_api "installation lookup" \
   | jq -r '.id')
 
 [ -n "$installation_id" ] && [ "$installation_id" != "null" ] \
-  || { echo "could not resolve installation id (is the App installed on ${SCOPE}?)" >&2; exit 1; }
+  || { log "❌ Could not resolve installation id (is the App installed on ${SCOPE}?)"; exit 1; }
 
 # --- 3. Exchange JWT for an installation access token ---
 installation_token=$(gh_api "installation token" -X POST \
@@ -83,7 +85,7 @@ installation_token=$(gh_api "installation token" -X POST \
   | jq -r '.token')
 
 [ -n "$installation_token" ] && [ "$installation_token" != "null" ] \
-  || { echo "failed to obtain installation access token" >&2; exit 1; }
+  || { log "❌ Failed to obtain installation access token"; exit 1; }
 
 # --- 4. Create the runner registration token ---
 # Requires the App to have Administration: Read and write (repo scope) or
